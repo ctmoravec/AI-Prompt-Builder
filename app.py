@@ -426,23 +426,30 @@ class PromptBuilder:
         return prompt, missing
 
 # =========================
-# Clear form helper
+# Clear form helpers
 # =========================
-def clear_form_state():
-    keys_to_clear = [
-        # selections
-        "select_role", "select_goal", "select_audience",
-        "select_context", "select_output", "select_tone",
-        # custom inputs
-        "custom_role", "custom_goal", "custom_audience",
-        "custom_context", "custom_output", "custom_tone",
-        # controls + output
-        "auto_update_prompt", "recursive_feedback", "generated_prompt", "prompt_name"
-    ]
-    for k in keys_to_clear:
-        if k in st.session_state:
-            del st.session_state[k]
-    st.rerun()
+CLEAR_KEYS = [
+    # selections
+    "select_role", "select_goal", "select_audience",
+    "select_context", "select_output", "select_tone",
+    # custom inputs
+    "custom_role", "custom_goal", "custom_audience",
+    "custom_context", "custom_output", "custom_tone",
+    # controls + output
+    "auto_update_prompt", "recursive_feedback", "generated_prompt", "prompt_name"
+]
+
+def _request_clear():
+    # set a flag; clearing will happen on the next run at the top-level (not in the callback)
+    st.session_state["_request_clear"] = True
+
+def _do_clear_if_requested():
+    if st.session_state.get("_request_clear"):
+        for k in CLEAR_KEYS:
+            if k in st.session_state:
+                del st.session_state[k]
+        # remove the trigger to avoid loops
+        del st.session_state["_request_clear"]
 
 # =========================
 # Prompt Browser
@@ -518,17 +525,17 @@ def render_backup_restore_tab():
 def main():
     st.set_page_config(layout="wide", page_title="CTM Enterprises Prompt Creation Tool")
     set_theme()
-    st.title("CTM Enterprises Prompt Creation Tool")
 
-    # Top utility row: single Clear Form button
-    left, right = st.columns([8, 1])
-    with right:
-        st.button("Clear Form", key="clear_form_top", on_click=clear_form_state)
+    # Perform any pending clear (triggered by the Clear Form tab button last run)
+    _do_clear_if_requested()
+
+    st.title("CTM Enterprises Prompt Creation Tool")
 
     tabs = st.tabs([
         "Element Creator", "Element Editor", "Prompt Builder",
-        "Browse Prompts", "Backup / Restore"
+        "Browse Prompts", "Backup / Restore", "Clear Form"
     ])
+
     with tabs[0]:
         ElementCreator.render()
     with tabs[1]:
@@ -539,6 +546,19 @@ def main():
         PromptBrowser.render()
     with tabs[4]:
         render_backup_restore_tab()
+    with tabs[5]:
+        st.subheader("Reset all selections and fields")
+        st.write("This will clear current selections, custom inputs, and the generated prompt box.")
+        # Use a form submit so it looks tidy and avoids the rerun-in-callback warning.
+        with st.form("clear_form_confirm"):
+            confirm = st.checkbox("Yes, clear everything now", value=False, key="confirm_clear")
+            do_clear = st.form_submit_button("Clear Now", use_container_width=False)
+            if do_clear:
+                if confirm:
+                    _request_clear()
+                    st.success("Cleared. Switch tabs or interact to refresh.")
+                else:
+                    st.warning("Please check the confirmation box first.")
 
 if __name__ == "__main__":
     main()
