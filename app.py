@@ -287,7 +287,7 @@ class PromptBuilder:
             st.session_state["generated_prompt"] = prompt
 
         # --- Name + action buttons row (Name | Save | Clear)
-        n_col, save_col, clear_col = st.columns([6, 1, 1])
+        n_col, save_col, clear_col = st.columns([6, 1, 1], vertical_alignment="bottom")
         with n_col:
             st.text_input("Prompt Name", key="prompt_name")
         with save_col:
@@ -514,3 +514,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
