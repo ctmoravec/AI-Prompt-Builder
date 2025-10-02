@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
 
+
 import requests
 import streamlit as st
 import pandas as pd
@@ -29,14 +30,14 @@ def set_theme():
         --border: #2b2b2f;
         --text: #e5e5e7;
         --muted-text: #a0a0a5;
-        --accent: #dc2626; /* red-600 */
+        --accent: #dc2626;
     }
     .stApp { background: var(--background); color: var(--text); }
 
     /* Tabs */
     .stTabs [data-baseweb="tab-list"]{
-        gap:6px; padding-bottom:2px; border-bottom:1px solid var(--border);
-        align-items: center;
+        display:flex; gap:6px; padding-bottom:2px;
+        border-bottom:1px solid var(--border); align-items:center; position:relative;
     }
     .stTabs [data-baseweb="tab"]{
         background:#121214; color:var(--muted-text);
@@ -56,15 +57,47 @@ def set_theme():
     .stTextInput input, .stTextArea textarea { color: var(--text) !important; background: var(--input) !important; }
     .stMultiSelect [data-baseweb="tag"]{ background:var(--accent)!important; color:#fff!important; border-radius:6px!important; }
 
-    /* Faux-tab button on header row (right side) */
-    .tabbar-btn > button{
+    /* Make our Clear button look exactly like a tab and sit in the same row */
+    .tab-inline { margin-left: 8px; }  /* tiny gap after last tab */
+    .tab-inline > button{
         background:#121214 !important; color:var(--muted-text) !important;
         border:0 !important; border-bottom:2px solid transparent !important;
         border-radius:6px 6px 0 0 !important; padding:8px 14px !important;
     }
-    .tabbar-btn > button:hover{ color:var(--text) !important; border-bottom-color:var(--accent) !important; }
+    .tab-inline > button:hover{ color:var(--text) !important; border-bottom-color:var(--accent) !important; }
+    /* Position the clear button in the tab bar line */
+    div[data-testid="stTabs"] + div.tab-inline-holder{ 
+        margin-top: -40px;    /* pull up into the tab bar line */
+        margin-left: 0px;
+    }
     </style>
     """, unsafe_allow_html=True)
+
+
+# =========================
+# CLEAR FORM (only selections + prompt, leaves checkboxes)
+# =========================
+def clear_form_state():
+    # set explicit defaults so widgets definitely reset
+    defaults = {
+        "select_role": "Skip",
+        "select_goal": "Skip",
+        "select_tone": "Skip",
+        "select_audience": [],
+        "select_context": [],
+        "select_output": [],
+        "custom_role": "",
+        "custom_goal": "",
+        "custom_tone": "",
+        "custom_audience": "",
+        "custom_context": "",
+        "custom_output": "",
+        "generated_prompt": "",
+        "prompt_name": "",
+    }
+    for k, v in defaults.items():
+        st.session_state[k] = v
+    # do NOT touch auto_update_prompt or recursive_feedback
 
 # =========================
 # GitHub Helpers (safe if secrets missing)
@@ -457,20 +490,28 @@ def main():
     set_theme()
     st.title("CTM Enterprises Prompt Creation Tool")
 
-    # Header row: tabs on the left, Clear button on the right (same row)
-    header_l, header_r = st.columns([8, 1], vertical_alignment="bottom")
-    with header_l:
-        tabs = st.tabs(["Element Creator","Element Editor","Prompt Builder","Browse Prompts","Backup / Restore"])
-    with header_r:
-        st.button("Clear Form", key="clear_form_btn", on_click=clear_form_state, help="Clear all inputs", type="secondary", use_container_width=True)
-        st.markdown('<div class="tabbar-btn"></div>', unsafe_allow_html=True)  # style hook
+    # Real tabs first
+    tabs = st.tabs(["Element Creator", "Element Editor", "Prompt Builder", "Browse Prompts", "Backup / Restore"])
 
-    # Tabs content
-    with tabs[0]: ElementCreator.render()
-    with tabs[1]: ElementEditor.render()
-    with tabs[2]: PromptBuilder.render()
-    with tabs[3]: PromptBrowser.render()
-    with tabs[4]: render_backup_restore_tab()
+    # Immediately after tabs, inject a button styled *as a tab* and aligned in the same row
+    st.markdown('<div class="tab-inline-holder"></div>', unsafe_allow_html=True)
+    clear_col = st.container()
+    with clear_col:
+        st.button("Clear Form", key="clear_form_btn", on_click=clear_form_state, help="Clear dropdowns/multiselects and the prompt box", type="secondary")
+    # Tag that button so CSS above styles it like a tab
+    st.markdown("<script>document.querySelectorAll('div[data-testid=\"column\"] button[kind=\"secondary\"]')?.forEach(b=>b.parentElement.classList.add('tab-inline'))</script>", unsafe_allow_html=True)
+
+    # --- Tab content (unchanged)
+    with tabs[0]:
+        ElementCreator.render()
+    with tabs[1]:
+        ElementEditor.render()
+    with tabs[2]:
+        PromptBuilder.render()
+    with tabs[3]:
+        PromptBrowser.render()
+    with tabs[4]:
+        render_backup_restore_tab()
 
 if __name__ == "__main__":
     main()
