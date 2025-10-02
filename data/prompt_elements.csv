@@ -27,3 +27,4 @@ Simplify Information,goal,“Simplify complex information for quick decisions.�
 Highlight Urgency,goal,“Highlight urgency and required actions.”
 Summary,output,"“Summarize the key points into a short, actionable overview.”"
 Proposal,output,“Draft a professional client-facing proposal.”
+Internal Note,output,“Create an internal note highlighting context and next steps.”
