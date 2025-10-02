@@ -350,7 +350,7 @@ def render_backup_restore_tab():
 def main():
     st.set_page_config(layout="wide", page_title="KMo's Prompt Creation Tool")
     set_theme()
-    st.title("KMo's Prompt Creation Tool")
+    st.title("CTM Enterprises Prompt Creation Tool")
 
     tabs = st.tabs(["Element Creator", "Element Editor", "Prompt Builder", "Browse Prompts", "Backup / Restore"])
 
@@ -367,3 +367,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
