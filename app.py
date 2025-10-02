@@ -3,7 +3,7 @@ import io
 import base64
 import json
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 import requests
 import streamlit as st
@@ -35,6 +35,7 @@ def set_theme():
     }
     .stApp { background-color: var(--background); color: var(--foreground); }
     .stTitle { color: var(--foreground) !important; font-weight: 600 !important; }
+
     .stTextInput > div > div,
     .stTextArea > div > div,
     .stSelectbox > div > div {
@@ -42,22 +43,30 @@ def set_theme():
         border-color: var(--border) !important;
         border-radius: 6px !important;
     }
+    .stTextInput input, .stTextArea textarea {
+        color: var(--foreground) !important;
+        background-color: var(--input) !important;
+    }
+
     .stButton > button {
         background-color: var(--secondary) !important;
         color: var(--foreground) !important;
         border: 1px solid var(--border) !important;
         border-radius: 6px !important;
         transition: all 0.2s ease-in-out !important;
+        padding: 8px 16px !important;
     }
     .stButton > button:hover {
         background-color: var(--muted) !important;
         border-color: var(--primary) !important;
     }
+
     .streamlit-expanderHeader {
         background-color: var(--secondary) !important;
         border-color: var(--border) !important;
         border-radius: 6px !important;
     }
+
     .stTabs [data-baseweb="tab-list"] { gap: 1px; background-color: var(--background); }
     .stTabs [data-baseweb="tab"] {
         background-color: var(--secondary);
@@ -69,15 +78,13 @@ def set_theme():
         background-color: var(--muted);
         color: var(--foreground);
     }
-    /* Ensure visible text inside widgets on dark theme */
-    .stTextInput input, .stTextArea textarea { color: var(--foreground) !important; background-color: var(--input) !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # =========================
 # GitHub Helpers (safe if secrets missing)
 # =========================
-def _gh_available():
+def _gh_available() -> bool:
     try:
         g = st.secrets.get("github", None)
         if not g:
@@ -87,31 +94,34 @@ def _gh_available():
     except Exception:
         return False
 
-def _gh_headers():
+def _gh_headers() -> Dict[str, str]:
     g = st.secrets["github"]
     return {
         "Authorization": f"Bearer {g['token']}",
         "Accept": "application/vnd.github+json",
     }
 
-def _gh_info():
+def _gh_info() -> Tuple[str, str, str, str]:
     g = st.secrets["github"]
     return g["owner"], g["repo"], g.get("branch", "main"), g.get("path_prefix", "data")
 
-def _gh_api_base(owner, repo):
+def _gh_api_base(owner: str, repo: str) -> str:
     return f"https://api.github.com/repos/{owner}/{repo}"
 
-def _gh_get_file(owner, repo, branch, path):
+def _gh_get_file(owner: str, repo: str, branch: str, path: str):
     url = f"{_gh_api_base(owner, repo)}/contents/{path}?ref={branch}"
     return requests.get(url, headers=_gh_headers())
 
-def _gh_get_file_sha(owner, repo, branch, path):
+def _gh_get_file_sha(owner: str, repo: str, branch: str, path: str):
     r = _gh_get_file(owner, repo, branch, path)
     if r.status_code == 200:
-        return r.json().get("sha")
+        try:
+            return r.json().get("sha")
+        except Exception:
+            return None
     return None
 
-def _gh_read_csv(filename):
+def _gh_read_csv(filename: str):
     if not _gh_available():
         return None
     try:
@@ -126,7 +136,7 @@ def _gh_read_csv(filename):
     except Exception:
         return None
 
-def _gh_write_csv(filename, df: pd.DataFrame, message="update data"):
+def _gh_write_csv(filename: str, df: pd.DataFrame, message: str = "update data") -> bool:
     if not _gh_available():
         raise RuntimeError("GitHub secrets not configured")
     owner, repo, branch, prefix = _gh_info()
@@ -282,12 +292,11 @@ class PromptBuilder:
             selections['tone'] = PromptBuilder._create_section("Tone", 'tone', df)
 
         # --- Controls
-        c1, c2, c3 = st.columns([1, 1, 6])
+        c1, c2, _ = st.columns([1, 1, 6])
         with c1:
             auto = st.checkbox("Auto-update", value=True, key="auto_update_prompt")
         with c2:
             recursive_feedback = st.checkbox("Request recursive feedback", value=False, key="recursive_feedback")
-       
 
         # Compute prompt + missing warnings
         prompt, missing = PromptBuilder._generate_prompt(selections, df, recursive_feedback)
@@ -298,17 +307,13 @@ class PromptBuilder:
                 "Add Content in **Element Editor** for better prompts:\n\n- " + "\n- ".join(missing)
             )
 
-        # --- Manual build button (useful if user turned Auto-update off)
-        if st.button("Build Prompt"):
-            st.session_state["generated_prompt"] = prompt
-
         # --- Keep session_state in sync if Auto-update is ON
         if "generated_prompt" not in st.session_state:
             st.session_state["generated_prompt"] = ""
         if auto:
             st.session_state["generated_prompt"] = prompt
 
-        # --- Prompt editor (stateful for manual tweaks/copy)
+        # --- Prompt editor (stateful so the user can tweak/copy)
         st.text_area("Generated Prompt", height=250, key="generated_prompt")
         st.info("Tip: turn OFF Auto-update if you want to manually edit and keep your edits while changing selections.")
 
@@ -346,7 +351,7 @@ class PromptBuilder:
         return {'selected': selected, 'custom': custom_content, 'elements': elements}
 
     @staticmethod
-    def _row_content_or_fallback(df: pd.DataFrame, title: str) -> (str, str):
+    def _row_content_or_fallback(df: pd.DataFrame, title: str) -> Tuple[str, str]:
         """Return (content, missing_label). If content is empty, use title as fallback and return the title in missing_label."""
         row = df[df['title'] == title]
         if row.empty:
@@ -358,7 +363,7 @@ class PromptBuilder:
 
     @staticmethod
     def _generate_prompt(selections: Dict[str, Dict], df: pd.DataFrame,
-                         recursive_feedback: bool) -> (str, list):
+                         recursive_feedback: bool) -> Tuple[str, list]:
         parts = []
         missing = []
 
@@ -437,6 +442,28 @@ def clear_form_state():
     for k in keys_to_clear:
         if k in st.session_state:
             del st.session_state[k]
+    st.rerun()
+
+# =========================
+# Prompt Browser
+# =========================
+class PromptBrowser:
+    @staticmethod
+    def render():
+        df = DataManager.load_data('prompt_history.csv', PROMPT_HISTORY_COLUMNS)
+        if df.empty:
+            st.warning("No prompts found. Please create and save some prompts first.")
+            return
+
+        try:
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df = df.sort_values("timestamp", ascending=False)
+        except Exception:
+            pass
+
+        for index, row in df.iterrows():
+            with st.expander(f"{row['name']} - {row['timestamp']}", expanded=False):
+                st.text_area("Prompt Content", value=row['prompt'], height=150, key=f"prompt_{index}")
 
 # =========================
 # Backup / Restore Tab
@@ -493,9 +520,14 @@ def main():
     set_theme()
     st.title("CTM Enterprises Prompt Creation Tool")
 
+    # Top utility row: single Clear Form button
+    left, right = st.columns([8, 1])
+    with right:
+        st.button("Clear Form", key="clear_form_top", on_click=clear_form_state)
+
     tabs = st.tabs([
         "Element Creator", "Element Editor", "Prompt Builder",
-        "Browse Prompts", "Backup / Restore", "Clear Form"
+        "Browse Prompts", "Backup / Restore"
     ])
     with tabs[0]:
         ElementCreator.render()
@@ -507,13 +539,6 @@ def main():
         PromptBrowser.render()
     with tabs[4]:
         render_backup_restore_tab()
-    with tabs[5]:
-        st.subheader("Clear Form")
-        st.write("This will reset all selections, custom inputs, and the generated prompt.")
-        if st.button("Clear now", type="primary"):
-            clear_form_state()
-            st.success("Cleared. Go back to **Prompt Builder**.")
 
 if __name__ == "__main__":
     main()
-
