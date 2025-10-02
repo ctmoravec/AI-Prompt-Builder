@@ -69,6 +69,8 @@ def set_theme():
         background-color: var(--muted);
         color: var(--foreground);
     }
+    /* Ensure visible text inside widgets on dark theme */
+    .stTextInput input, .stTextArea textarea { color: var(--foreground) !important; background-color: var(--input) !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -280,11 +282,15 @@ class PromptBuilder:
             selections['tone'] = PromptBuilder._create_section("Tone", 'tone', df)
 
         # --- Controls
-        c1, c2, _ = st.columns([1, 1, 6])
+        c1, c2, c3 = st.columns([1, 1, 6])
         with c1:
             auto = st.checkbox("Auto-update", value=True, key="auto_update_prompt")
         with c2:
             recursive_feedback = st.checkbox("Request recursive feedback", value=False, key="recursive_feedback")
+        with c3:
+            if st.button("Clear form", key="inline_clear_form"):
+                clear_form_state()
+                st.experimental_rerun()
 
         # Compute prompt + missing warnings
         prompt, missing = PromptBuilder._generate_prompt(selections, df, recursive_feedback)
@@ -305,10 +311,7 @@ class PromptBuilder:
         if auto:
             st.session_state["generated_prompt"] = prompt
 
-        # Optional: small preview above the editor so you can see what's being generated
-        # st.code(st.session_state["generated_prompt"] or "(empty)", language="markdown")
-
-                # --- Prompt editor (stateful for manual tweaks/copy)
+        # --- Prompt editor (stateful for manual tweaks/copy)
         st.text_area("Generated Prompt", height=250, key="generated_prompt")
         st.info("Tip: turn OFF Auto-update if you want to manually edit and keep your edits while changing selections.")
 
@@ -326,7 +329,6 @@ class PromptBuilder:
                 else:
                     DataManager.save_prompt(prompt_name, text_to_save)
                     st.success(f"Saved: {prompt_name}")
-
 
     @staticmethod
     def _create_section(title: str, element_type: str, df: pd.DataFrame,
@@ -421,37 +423,23 @@ class PromptBuilder:
             )
         return prompt, missing
 
-
-    @staticmethod
-    def _display_prompt(prompt: str):
-        st.text_area("Generated Prompt", value=prompt, height=250, key="generated_prompt")
-        st.info("To edit this prompt, click in and edit. To copy, use Ctrl-A, then copy.")
-        col1, col2 = st.columns(2)
-        with col1:
-            prompt_name = st.text_input("Prompt Name")
-        with col2:
-            if st.button("Save Prompt"):
-                if prompt_name:
-                    DataManager.save_prompt(prompt_name, prompt)
-                    st.success("Prompt saved successfully!")
-
-class PromptBrowser:
-    @staticmethod
-    def render():
-        df = DataManager.load_data('prompt_history.csv', PROMPT_HISTORY_COLUMNS)
-        if df.empty:
-            st.warning("No prompts found. Please create and save some prompts first.")
-            return
-
-        try:
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            df = df.sort_values("timestamp", ascending=False)
-        except Exception:
-            pass
-
-        for index, row in df.iterrows():
-            with st.expander(f"{row['name']} - {row['timestamp']}", expanded=False):
-                st.text_area("Prompt Content", value=row['prompt'], height=150, key=f"prompt_{index}")
+# =========================
+# Clear form helper
+# =========================
+def clear_form_state():
+    keys_to_clear = [
+        # selections
+        "select_role", "select_goal", "select_audience",
+        "select_context", "select_output", "select_tone",
+        # custom inputs
+        "custom_role", "custom_goal", "custom_audience",
+        "custom_context", "custom_output", "custom_tone",
+        # controls + output
+        "auto_update_prompt", "recursive_feedback", "generated_prompt", "prompt_name"
+    ]
+    for k in keys_to_clear:
+        if k in st.session_state:
+            del st.session_state[k]
 
 # =========================
 # Backup / Restore Tab
@@ -499,21 +487,6 @@ def render_backup_restore_tab():
                 st.success("History merged and saved.")
             except Exception as e:
                 st.error(f"Failed to import history: {e}")
-                def clear_form_state():
-    # selection widgets
-    keys_to_clear = [
-        "select_role", "select_goal", "select_audience",
-        "select_context", "select_output", "select_tone",
-        # custom inputs
-        "custom_role", "custom_goal", "custom_audience",
-        "custom_context", "custom_output", "custom_tone",
-        # controls + output
-        "auto_update_prompt", "recursive_feedback", "generated_prompt", "prompt_name"
-    ]
-    for k in keys_to_clear:
-        if k in st.session_state:
-            del st.session_state[k]
-
 
 # =========================
 # Main
@@ -523,7 +496,10 @@ def main():
     set_theme()
     st.title("CTM Enterprises Prompt Creation Tool")
 
-    tabs = st.tabs(["Element Creator", "Element Editor", "Prompt Builder", "Browse Prompts", "Backup / Restore"])
+    tabs = st.tabs([
+        "Element Creator", "Element Editor", "Prompt Builder",
+        "Browse Prompts", "Backup / Restore", "Clear Form"
+    ])
     with tabs[0]:
         ElementCreator.render()
     with tabs[1]:
@@ -534,9 +510,12 @@ def main():
         PromptBrowser.render()
     with tabs[4]:
         render_backup_restore_tab()
+    with tabs[5]:
+        st.subheader("Clear Form")
+        st.write("This will reset all selections, custom inputs, and the generated prompt.")
+        if st.button("Clear now", type="primary"):
+            clear_form_state()
+            st.success("Cleared. Go back to **Prompt Builder**.")
 
 if __name__ == "__main__":
     main()
-
-
-
