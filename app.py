@@ -266,9 +266,9 @@ class PromptBuilder:
     def render():
         df = DataManager.load_data('prompt_elements.csv', CSV_COLUMNS)
 
+        # --- Selection UI
         col1, col2, col3 = st.columns(3)
         selections = {}
-
         with col1:
             selections['role'] = PromptBuilder._create_section("Role", 'role', df)
             selections['goal'] = PromptBuilder._create_section("Goal", 'goal', df)
@@ -279,10 +279,38 @@ class PromptBuilder:
             selections['output'] = PromptBuilder._create_section("Output", 'output', df, True)
             selections['tone'] = PromptBuilder._create_section("Tone", 'tone', df)
 
-        recursive_feedback = st.checkbox("Request recursive feedback")
+        # --- Controls
+        c1, c2, _ = st.columns([1, 1, 6])
+        with c1:
+            auto = st.checkbox("Auto-update", value=True, key="auto_update_prompt")
+        with c2:
+            recursive_feedback = st.checkbox("Request recursive feedback", value=False, key="recursive_feedback")
 
-        prompt = PromptBuilder._generate_prompt(selections, df, recursive_feedback)
-        PromptBuilder._display_prompt(prompt)
+        # Compute prompt + missing warnings
+        prompt, missing = PromptBuilder._generate_prompt(selections, df, recursive_feedback)
+
+        if missing:
+            st.warning(
+                "These elements have no **Content** set (using the Title as a fallback). "
+                "Add Content in **Element Editor** for better prompts:\n\n- " + "\n- ".join(missing)
+            )
+
+        # --- Manual build button (useful if user turned Auto-update off)
+        if st.button("Build Prompt"):
+            st.session_state["generated_prompt"] = prompt
+
+        # --- Keep session_state in sync if Auto-update is ON
+        if "generated_prompt" not in st.session_state:
+            st.session_state["generated_prompt"] = ""
+        if auto:
+            st.session_state["generated_prompt"] = prompt
+
+        # Optional: small preview above the editor so you can see what's being generated
+        # st.code(st.session_state["generated_prompt"] or "(empty)", language="markdown")
+
+        # --- Prompt editor (stateful for manual tweaks/copy)
+        st.text_area("Generated Prompt", height=250, key="generated_prompt")
+        st.info("Tip: turn OFF Auto-update if you want to manually edit and keep your edits while changing selections.")
 
     @staticmethod
     def _create_section(title: str, element_type: str, df: pd.DataFrame,
@@ -303,44 +331,80 @@ class PromptBuilder:
         return {'selected': selected, 'custom': custom_content, 'elements': elements}
 
     @staticmethod
+    def _row_content_or_fallback(df: pd.DataFrame, title: str) -> (str, str):
+        """Return (content, missing_label). If content is empty, use title as fallback and return the title in missing_label."""
+        row = df[df['title'] == title]
+        if row.empty:
+            return "", ""
+        content = str(row['content'].values[0]).strip()
+        if content:
+            return content, ""
+        return title, title  # fallback to title, and report missing
+
+    @staticmethod
     def _generate_prompt(selections: Dict[str, Dict], df: pd.DataFrame,
-                         recursive_feedback: bool) -> str:
-        prompt_parts = []
+                         recursive_feedback: bool) -> (str, list):
+        parts = []
+        missing = []
+
         for section, data in selections.items():
             sel = data['selected']
+
+            # Skip no-choice
             if (isinstance(sel, str) and sel == "Skip") or (isinstance(sel, list) and (not sel or sel == ["Skip"])):
                 continue
 
-            section_title = section.title()
+            title = section.title()
+            if section == 'audience':
+                title = "Target Audience"
+
+            # Multi-select sections
             if section in ['audience', 'context', 'output']:
-                if section == 'audience':
-                    section_title = "Target Audience"
-                if isinstance(sel, list):
-                    if "Write your own" in sel and data['custom']:
-                        content = data['custom']
-                    else:
-                        chosen = [s for s in sel if s not in ("Skip", "Write your own")]
-                        content = "\n".join([df[df['title'] == a]['content'].values[0] for a in chosen if not df[df['title'] == a].empty])
+                if data['custom']:
+                    content = data['custom']
+                elif isinstance(sel, list):
+                    snippets = []
+                    for t in [s for s in sel if s not in ("Skip", "Write your own")]:
+                        c, m = PromptBuilder._row_content_or_fallback(df, t)
+                        if m:
+                            missing.append(f"{title} → {m}")
+                        if c:
+                            snippets.append(c)
+                    content = "\n".join(snippets)
                 else:
-                    content = data['custom'] if sel == "Write your own" else df[df['title'] == sel]['content'].values[0]
+                    if sel not in ("Skip", "Write your own"):
+                        c, m = PromptBuilder._row_content_or_fallback(df, sel)
+                        if m:
+                            missing.append(f"{title} → {m}")
+                        content = c
+                    else:
+                        content = ""
                 if content:
-                    prompt_parts.append(f"{section_title}:\n{content}")
+                    parts.append(f"{title}:\n{content}")
+
+            # Single-select sections
             else:
                 if isinstance(sel, str) and sel == "Write your own":
                     content = data['custom']
+                elif isinstance(sel, str):
+                    c, m = PromptBuilder._row_content_or_fallback(df, sel)
+                    if m:
+                        missing.append(f"{title} → {m}")
+                    content = c
                 else:
-                    content = df[df['title'] == sel]['content'].values[0] if isinstance(sel, str) and not df[df['title'] == sel].empty else ""
+                    content = ""
                 if content:
-                    prompt_parts.append(f"{section_title}: {content}")
+                    parts.append(f"{title}: {content}")
 
-        prompt = "\n\n".join(prompt_parts)
+        prompt = "\n\n".join(parts)
         if recursive_feedback:
             prompt += (
                 "\n\nBefore you provide the response, please ask me any questions that you feel could "
                 "help you craft a better response. If you feel you have enough information to craft this response, "
                 "please just provide it."
             )
-        return prompt
+        return prompt, missing
+
 
     @staticmethod
     def _display_prompt(prompt: str):
@@ -442,3 +506,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
