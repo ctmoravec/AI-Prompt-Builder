@@ -499,6 +499,21 @@ def render_backup_restore_tab():
                 st.success("History merged and saved.")
             except Exception as e:
                 st.error(f"Failed to import history: {e}")
+                def clear_form_state():
+    # selection widgets
+    keys_to_clear = [
+        "select_role", "select_goal", "select_audience",
+        "select_context", "select_output", "select_tone",
+        # custom inputs
+        "custom_role", "custom_goal", "custom_audience",
+        "custom_context", "custom_output", "custom_tone",
+        # controls + output
+        "auto_update_prompt", "recursive_feedback", "generated_prompt", "prompt_name"
+    ]
+    for k in keys_to_clear:
+        if k in st.session_state:
+            del st.session_state[k]
+
 
 # =========================
 # Main
@@ -522,5 +537,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
