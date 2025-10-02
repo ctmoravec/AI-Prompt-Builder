@@ -491,7 +491,7 @@ def main():
     st.title("CTM Enterprises Prompt Creation Tool")
 
     # Real tabs first
-    tabs = st.tabs(["Element Creator", "Element Editor", "Prompt Builder", "Browse Prompts", "Backup / Restore"])
+    tabs = st.tabs(["Element Creator", "Element Editor", "Prompt Builder", "Browse Prompts", "Backup / Restore", "Clear Form"])
 
     # Immediately after tabs, inject a button styled *as a tab* and aligned in the same row
     st.markdown('<div class="tab-inline-holder"></div>', unsafe_allow_html=True)
@@ -515,3 +515,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
