@@ -255,13 +255,13 @@ class ElementEditor:
                     df.at[index, 'content'] = new_content
                     DataManager.save_data(df, 'prompt_elements.csv')
                     st.success("Updated successfully!")
-                    st.experimental_rerun()
+                    st.rerun()
             with col2:
                 if st.button("Delete", key=f"delete_{index}"):
                     df = df.drop(index)
                     DataManager.save_data(df, 'prompt_elements.csv')
                     st.success("Deleted successfully!")
-                    st.experimental_rerun()
+                    st.rerun()
 
 class PromptBuilder:
     @staticmethod
@@ -287,10 +287,7 @@ class PromptBuilder:
             auto = st.checkbox("Auto-update", value=True, key="auto_update_prompt")
         with c2:
             recursive_feedback = st.checkbox("Request recursive feedback", value=False, key="recursive_feedback")
-        with c3:
-            if st.button("Clear form", key="inline_clear_form"):
-                clear_form_state()
-                st.experimental_rerun()
+       
 
         # Compute prompt + missing warnings
         prompt, missing = PromptBuilder._generate_prompt(selections, df, recursive_feedback)
@@ -519,3 +516,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
