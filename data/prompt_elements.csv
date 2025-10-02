@@ -15,3 +15,4 @@ Light,tone,"“Use a warm, approachable, and optimistic tone.”"
 Professional,tone,"“Keep the tone professional, clear, and respectful.”"
 Firm,tone,“Use a direct and confident tone while staying respectful.”
 Stern,tone,Use a serious and authoritative tone that conveys urgency.”
+Urgent,context,“This is urgent and must highlight deadlines.”
