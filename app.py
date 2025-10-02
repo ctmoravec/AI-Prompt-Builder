@@ -17,67 +17,88 @@ CSV_COLUMNS = ['title', 'type', 'content']
 PROMPT_HISTORY_COLUMNS = ['name', 'timestamp', 'prompt']
 
 # =========================
-# Theme / Styling
+# Theme / Styling (red accent, dark UI)
 # =========================
 def set_theme():
     st.markdown("""
     <style>
     :root {
-        --background: #09090B;
-        --foreground: #FAFAFA;
-        --muted: #27272A;
-        --muted-foreground: #A1A1AA;
-        --popover: #18181B;
-        --border: #27272A;
-        --input: #27272A;
-        --primary: #FAFAFA;
-        --secondary: #27272A;
+        --background: #0b0b0c;
+        --surface: #18181b;
+        --input: #242426;
+        --border: #2b2b2f;
+        --text: #e5e5e7;
+        --muted-text: #a0a0a5;
+        --accent: #dc2626; /* red-600 */
     }
-    .stApp { background-color: var(--background); color: var(--foreground); }
-    .stTitle { color: var(--foreground) !important; font-weight: 600 !important; }
 
+    .stApp { background: var(--background); color: var(--text); }
+    .stTitle { color: var(--text) !important; font-weight: 700 !important; }
+
+    /* Inputs */
     .stTextInput > div > div,
     .stTextArea > div > div,
-    .stSelectbox > div > div {
-        background-color: var(--input) !important;
-        border-color: var(--border) !important;
-        border-radius: 6px !important;
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div {
+        background: var(--input) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
     }
     .stTextInput input, .stTextArea textarea {
-        color: var(--foreground) !important;
-        background-color: var(--input) !important;
+        color: var(--text) !important;
+        background: var(--input) !important;
     }
 
+    /* Buttons */
     .stButton > button {
-        background-color: var(--secondary) !important;
-        color: var(--foreground) !important;
+        background: var(--surface) !important;
+        color: var(--text) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 6px !important;
-        transition: all 0.2s ease-in-out !important;
-        padding: 8px 16px !important;
+        border-radius: 8px !important;
+        padding: 8px 14px !important;
+        transition: all .15s ease-in-out;
     }
     .stButton > button:hover {
-        background-color: var(--muted) !important;
-        border-color: var(--primary) !important;
+        border-color: var(--accent) !important;
     }
 
-    .streamlit-expanderHeader {
-        background-color: var(--secondary) !important;
-        border-color: var(--border) !important;
-        border-radius: 6px !important;
+    /* Tabs — underline active with red */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+        background: transparent;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 2px;
     }
-
-    .stTabs [data-baseweb="tab-list"] { gap: 1px; background-color: var(--background); }
     .stTabs [data-baseweb="tab"] {
-        background-color: var(--secondary);
-        border-radius: 4px 4px 0 0;
-        padding: 8px 16px;
-        color: var(--muted-foreground);
+        background: #121214;
+        color: var(--muted-text);
+        border-radius: 6px 6px 0 0;
+        padding: 8px 14px;
+        border-bottom: 2px solid transparent;
     }
     .stTabs [aria-selected="true"] {
-        background-color: var(--muted);
-        color: var(--foreground);
+        color: var(--text);
+        background: #161618;
+        border-bottom-color: var(--accent);
     }
+
+    /* Expander header */
+    .streamlit-expanderHeader {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+    }
+
+    /* Multiselect tags → red chips */
+    .stMultiSelect [data-baseweb="tag"] {
+        background: var(--accent) !important;
+        color: white !important;
+        border-radius: 6px !important;
+        border: 0 !important;
+    }
+
+    /* Checkbox accent */
+    input[type="checkbox"] { accent-color: var(--accent); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -89,17 +110,13 @@ def _gh_available() -> bool:
         g = st.secrets.get("github", None)
         if not g:
             return False
-        needed = {"token", "owner", "repo"}
-        return needed.issubset(set(g.keys()))
+        return {"token", "owner", "repo"}.issubset(set(g.keys()))
     except Exception:
         return False
 
 def _gh_headers() -> Dict[str, str]:
     g = st.secrets["github"]
-    return {
-        "Authorization": f"Bearer {g['token']}",
-        "Accept": "application/vnd.github+json",
-    }
+    return {"Authorization": f"Bearer {g['token']}", "Accept": "application/vnd.github+json"}
 
 def _gh_info() -> Tuple[str, str, str, str]:
     g = st.secrets["github"]
@@ -159,7 +176,7 @@ def _gh_write_csv(filename: str, df: pd.DataFrame, message: str = "update data")
 class DataManager:
     @staticmethod
     def load_data(filename: str, columns: List[str]) -> pd.DataFrame:
-        # Try GitHub first
+        # Try GitHub
         try:
             buf = _gh_read_csv(filename)
             if buf is not None:
@@ -171,7 +188,7 @@ class DataManager:
         except Exception as e:
             st.warning(f"GitHub load failed for {filename}: {e}")
 
-        # Fallback local (ephemeral on Streamlit Cloud)
+        # Local fallback
         if not os.path.exists(filename):
             df = pd.DataFrame(columns=columns)
             df.to_csv(filename, index=False)
@@ -184,13 +201,11 @@ class DataManager:
 
     @staticmethod
     def save_data(df: pd.DataFrame, filename: str) -> None:
-        # Try GitHub
         try:
             _gh_write_csv(filename, df, message=f"update {filename}")
             return
         except Exception as e:
             st.warning(f"GitHub save failed for {filename}: {e}")
-        # Fallback local
         df.to_csv(filename, index=False)
 
     @staticmethod
@@ -217,12 +232,12 @@ class ElementCreator:
             if st.button("Add Element", key="add_element"):
                 if not title:
                     st.error("Title is required.")
-                    return
-                df = DataManager.load_data('prompt_elements.csv', CSV_COLUMNS)
-                new_row = pd.DataFrame({'title': [title], 'type': [element_type], 'content': [content]})
-                df = pd.concat([df, new_row], ignore_index=True)
-                DataManager.save_data(df, 'prompt_elements.csv')
-                st.success("Element added successfully!")
+                else:
+                    df = DataManager.load_data('prompt_elements.csv', CSV_COLUMNS)
+                    new_row = pd.DataFrame({'title': [title], 'type': [element_type], 'content': [content]})
+                    df = pd.concat([df, new_row], ignore_index=True)
+                    DataManager.save_data(df, 'prompt_elements.csv')
+                    st.success("Element added successfully!")
 
 class ElementEditor:
     @staticmethod
@@ -257,21 +272,19 @@ class ElementEditor:
             with col2:
                 new_content = st.text_area("Content", value=row['content'],
                                            key=f"content_{index}", height=100)
-            col1, col2 = st.columns(2)
-            with col1:
+            c1, c2 = st.columns(2)
+            with c1:
                 if st.button("Update", key=f"update_{index}"):
                     df.at[index, 'title'] = new_title
                     df.at[index, 'type'] = new_type
                     df.at[index, 'content'] = new_content
                     DataManager.save_data(df, 'prompt_elements.csv')
                     st.success("Updated successfully!")
-                    st.rerun()
-            with col2:
+            with c2:
                 if st.button("Delete", key=f"delete_{index}"):
                     df = df.drop(index)
                     DataManager.save_data(df, 'prompt_elements.csv')
                     st.success("Deleted successfully!")
-                    st.rerun()
 
 class PromptBuilder:
     @staticmethod
@@ -352,7 +365,6 @@ class PromptBuilder:
 
     @staticmethod
     def _row_content_or_fallback(df: pd.DataFrame, title: str) -> Tuple[str, str]:
-        """Return (content, missing_label). If content is empty, use title as fallback and return the title in missing_label."""
         row = df[df['title'] == title]
         if row.empty:
             return "", ""
@@ -369,16 +381,11 @@ class PromptBuilder:
 
         for section, data in selections.items():
             sel = data['selected']
-
-            # Skip no-choice
             if (isinstance(sel, str) and sel == "Skip") or (isinstance(sel, list) and (not sel or sel == ["Skip"])):
                 continue
 
-            title = section.title()
-            if section == 'audience':
-                title = "Target Audience"
+            title = "Target Audience" if section == 'audience' else section.title()
 
-            # Multi-select sections
             if section in ['audience', 'context', 'output']:
                 if data['custom']:
                     content = data['custom']
@@ -386,30 +393,24 @@ class PromptBuilder:
                     snippets = []
                     for t in [s for s in sel if s not in ("Skip", "Write your own")]:
                         c, m = PromptBuilder._row_content_or_fallback(df, t)
-                        if m:
-                            missing.append(f"{title} → {m}")
-                        if c:
-                            snippets.append(c)
+                        if m: missing.append(f"{title} → {m}")
+                        if c: snippets.append(c)
                     content = "\n".join(snippets)
                 else:
                     if sel not in ("Skip", "Write your own"):
                         c, m = PromptBuilder._row_content_or_fallback(df, sel)
-                        if m:
-                            missing.append(f"{title} → {m}")
+                        if m: missing.append(f"{title} → {m}")
                         content = c
                     else:
                         content = ""
                 if content:
                     parts.append(f"{title}:\n{content}")
-
-            # Single-select sections
             else:
                 if isinstance(sel, str) and sel == "Write your own":
                     content = data['custom']
                 elif isinstance(sel, str):
                     c, m = PromptBuilder._row_content_or_fallback(df, sel)
-                    if m:
-                        missing.append(f"{title} → {m}")
+                    if m: missing.append(f"{title} → {m}")
                     content = c
                 else:
                     content = ""
@@ -426,7 +427,9 @@ class PromptBuilder:
         return prompt, missing
 
 # =========================
-# Clear form helpers
+# Clear Form (inline tab)
+# Only clears dropdown/multiselect selections, custom text inputs,
+# and the prompt text field + name. Leaves checkboxes alone.
 # =========================
 CLEAR_KEYS = [
     # selections
@@ -435,21 +438,14 @@ CLEAR_KEYS = [
     # custom inputs
     "custom_role", "custom_goal", "custom_audience",
     "custom_context", "custom_output", "custom_tone",
-    # controls + output
-    "auto_update_prompt", "recursive_feedback", "generated_prompt", "prompt_name"
+    # prompt box + name
+    "generated_prompt", "prompt_name"
 ]
 
-def _request_clear():
-    # set a flag; clearing will happen on the next run at the top-level (not in the callback)
-    st.session_state["_request_clear"] = True
-
-def _do_clear_if_requested():
-    if st.session_state.get("_request_clear"):
-        for k in CLEAR_KEYS:
-            if k in st.session_state:
-                del st.session_state[k]
-        # remove the trigger to avoid loops
-        del st.session_state["_request_clear"]
+def clear_now():
+    for k in CLEAR_KEYS:
+        if k in st.session_state:
+            del st.session_state[k]
 
 # =========================
 # Prompt Browser
@@ -461,13 +457,11 @@ class PromptBrowser:
         if df.empty:
             st.warning("No prompts found. Please create and save some prompts first.")
             return
-
         try:
             df["timestamp"] = pd.to_datetime(df["timestamp"])
             df = df.sort_values("timestamp", ascending=False)
         except Exception:
             pass
-
         for index, row in df.iterrows():
             with st.expander(f"{row['name']} - {row['timestamp']}", expanded=False):
                 st.text_area("Prompt Content", value=row['prompt'], height=150, key=f"prompt_{index}")
@@ -525,10 +519,6 @@ def render_backup_restore_tab():
 def main():
     st.set_page_config(layout="wide", page_title="CTM Enterprises Prompt Creation Tool")
     set_theme()
-
-    # Perform any pending clear (triggered by the Clear Form tab button last run)
-    _do_clear_if_requested()
-
     st.title("CTM Enterprises Prompt Creation Tool")
 
     tabs = st.tabs([
@@ -547,18 +537,9 @@ def main():
     with tabs[4]:
         render_backup_restore_tab()
     with tabs[5]:
-        st.subheader("Reset all selections and fields")
-        st.write("This will clear current selections, custom inputs, and the generated prompt box.")
-        # Use a form submit so it looks tidy and avoids the rerun-in-callback warning.
-        with st.form("clear_form_confirm"):
-            confirm = st.checkbox("Yes, clear everything now", value=False, key="confirm_clear")
-            do_clear = st.form_submit_button("Clear Now", use_container_width=False)
-            if do_clear:
-                if confirm:
-                    _request_clear()
-                    st.success("Cleared. Switch tabs or interact to refresh.")
-                else:
-                    st.warning("Please check the confirmation box first.")
+        # Instant clear — no confirmation, no callbacks, no rerun needed
+        clear_now()
+        st.success("Cleared. Switch back to your tab (e.g., Prompt Builder).")
 
 if __name__ == "__main__":
     main()
