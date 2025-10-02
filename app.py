@@ -53,19 +53,33 @@ def set_theme():
         background: var(--input) !important; border:1px solid var(--border) !important;
         border-radius:8px !important;
     }
-    .stTextInput input, .stTextArea textarea { color: var(--text) !important; background: var(--input) !important; }
-    .stMultiSelect [data-baseweb="tag"]{ background:var(--accent)!important; color:#fff!important; border-radius:6px!important; }
+    .stTextInput input, .stTextArea textarea {
+        color: var(--text) !important; background: var(--input) !important;
+    }
+    .stMultiSelect [data-baseweb="tag"]{
+        background:var(--accent)!important; color:#fff!important; border-radius:6px!important;
+    }
 
     /* Clear button that LOOKS like a tab, sits right after the real tabs */
-    .tab-clear-wrap{ display:inline-block; margin-left:6px; margin-top:-42px; } /* pull into tab row */
+    .tab-clear-wrap{
+        display:inline-block; margin-left:6px; margin-top:-42px; /* tweak -40..-44 to align */
+    }
     .tab-clear-wrap > button{
         background:#121214 !important; color:var(--text) !important;
         border:0 !important; border-bottom:2px solid var(--accent) !important;
         border-radius:6px 6px 0 0 !important; padding:8px 14px !important;
     }
     .tab-clear-wrap > button:focus{ outline:none !important; }
+
+    /* Action buttons row: tighter buttons */
+    .stButton > button {
+        padding: 8px 14px !important;
+        border-radius: 8px !important;
+    }
     </style>
     """, unsafe_allow_html=True)
+
+
 
 # =========================
 # GitHub Helpers (safe if secrets missing)
@@ -202,98 +216,70 @@ class ElementEditor:
 class PromptBuilder:
     @staticmethod
     def render():
-        df=DataManager.load_data('prompt_elements.csv', CSV_COLUMNS)
-        c1,c2,c3=st.columns(3)
-        sel={}
+        df = DataManager.load_data('prompt_elements.csv', CSV_COLUMNS)
+
+        # --- Selection UI (3 cols, like your sketch)
+        c1, c2, c3 = st.columns(3)
+        selections = {}
         with c1:
-            sel['role']=PromptBuilder._sec("Role",'role',df)
-            sel['goal']=PromptBuilder._sec("Goal",'goal',df)
+            selections['role'] = PromptBuilder._sec("Role", 'role', df)
+            selections['goal'] = PromptBuilder._sec("Goal", 'goal', df)
         with c2:
-            sel['audience']=PromptBuilder._sec("Target Audience",'audience',df,True)
-            sel['context']=PromptBuilder._sec("Context",'context',df,True)
+            selections['audience'] = PromptBuilder._sec("Target Audience", 'audience', df, True)
+            selections['context']  = PromptBuilder._sec("Context", 'context', df, True)
         with c3:
-            sel['output']=PromptBuilder._sec("Output",'output',df,True)
-            sel['tone']=PromptBuilder._sec("Tone",'tone',df)
+            selections['output'] = PromptBuilder._sec("Output", 'output', df, True)
+            selections['tone']   = PromptBuilder._sec("Tone", 'tone', df)
 
-        c1,c2,_=st.columns([1,1,6])
-        with c1: auto=st.checkbox("Auto-update", value=True, key="auto_update_prompt")
-        with c2: recursive=st.checkbox("Request recursive feedback", value=False, key="recursive_feedback")
+        # --- Build prompt (checks live at the bottom now)
+        auto = st.session_state.get("auto_update_prompt", True)
+        recursive = st.session_state.get("recursive_feedback", False)
+        prompt, missing = PromptBuilder._build(selections, df, recursive)
 
-        prompt, missing = PromptBuilder._build(sel, df, recursive)
         if missing:
-            st.warning("These elements have no **Content** set (using the Title as a fallback). "
-                       "Add Content in **Element Editor** for better prompts:\n\n- " + "\n- ".join(missing))
+            st.warning(
+                "These elements have no **Content** set (using the Title as a fallback). "
+                "Add Content in **Element Editor** for better prompts:\n\n- " + "\n- ".join(missing)
+            )
 
-        if "generated_prompt" not in st.session_state: st.session_state["generated_prompt"]=""
-        if auto: st.session_state["generated_prompt"]=prompt
+        if "generated_prompt" not in st.session_state:
+            st.session_state["generated_prompt"] = ""
+        if auto:
+            st.session_state["generated_prompt"] = prompt
 
-        st.text_area("Generated Prompt", height=250, key="generated_prompt")
-        st.info("Tip: turn OFF Auto-update if you want to manually edit and keep your edits while changing selections.")
-
-        s1,s2=st.columns([2,1])
-        with s1: pname=st.text_input("Prompt Name", key="prompt_name")
-        with s2:
-            if st.button("Save Prompt", key="save_prompt_btn"):
-                txt=st.session_state.get("generated_prompt","").strip()
-                if not txt: st.warning("Nothing to save — the prompt is empty.")
-                elif not pname: st.warning("Please enter a Prompt Name.")
-                else: DataManager.save_prompt(pname, txt); st.success(f"Saved: {pname}")
-
-    @staticmethod
-    def _sec(title:str, etype:str, df:pd.DataFrame, multi:bool=False)->Dict[str,Any]:
-        elements=df[df['type']==etype]
-        options=["Skip","Write your own"]+elements['title'].tolist()
-        if multi: selected=st.multiselect(title, options, key=f"select_{etype}")
-        else: selected=st.selectbox(title, options, key=f"select_{etype}")
-        custom=""
-        if (multi and isinstance(selected,list) and "Write your own" in selected) or (not multi and selected=="Write your own"):
-            custom=st.text_input(f"Custom {title}", key=f"custom_{etype}")
-        return {'selected':selected,'custom':custom,'elements':elements}
-
-    @staticmethod
-    def _content_or_title(df:pd.DataFrame, title:str)->Tuple[str,str]:
-        row=df[df['title']==title]
-        if row.empty: return "",""
-        c=str(row['content'].values[0]).strip()
-        return (c,"") if c else (title,title)
-
-    @staticmethod
-    def _build(selections:Dict[str,Dict], df:pd.DataFrame, recursive:bool)->Tuple[str,list]:
-        parts=[]; missing=[]
-        for section,data in selections.items():
-            sel=data['selected']
-            if (isinstance(sel,str) and sel=="Skip") or (isinstance(sel,list) and (not sel or sel==["Skip"])): continue
-            title="Target Audience" if section=="audience" else section.title()
-            if section in ['audience','context','output']:
-                if data['custom']: content=data['custom']
-                elif isinstance(sel,list):
-                    snips=[]
-                    for t in [s for s in sel if s not in ("Skip","Write your own")]:
-                        c,m=PromptBuilder._content_or_title(df,t)
-                        if m: missing.append(f"{title} → {m}")
-                        if c: snips.append(c)
-                    content="\n".join(snips)
+        # --- Name + action buttons row (Name | Save | Clear)
+        n_col, save_col, clear_col = st.columns([6, 1, 1])
+        with n_col:
+            st.text_input("Prompt Name", key="prompt_name")
+        with save_col:
+            if st.button("Save Prompt", key="save_prompt_btn", use_container_width=True):
+                text_to_save = st.session_state.get("generated_prompt", "").strip()
+                if not text_to_save:
+                    st.warning("Nothing to save — the prompt is empty.")
+                elif not st.session_state.get("prompt_name", "").strip():
+                    st.warning("Please enter a Prompt Name.")
                 else:
-                    if sel not in ("Skip","Write your own"):
-                        c,m=PromptBuilder._content_or_title(df,sel)
-                        if m: missing.append(f"{title} → {m}")
-                        content=c
-                    else: content=""
-                if content: parts.append(f"{title}:\n{content}")
-            else:
-                if isinstance(sel,str) and sel=="Write your own": content=data['custom']
-                elif isinstance(sel,str):
-                    c,m=PromptBuilder._content_or_title(df,sel)
-                    if m: missing.append(f"{title} → {m}")
-                    content=c
-                else: content=""
-                if content: parts.append(f"{title}: {content}")
-        prompt="\n\n".join(parts)
-        if recursive and prompt:
-            prompt += ("\n\nBefore you provide the response, please ask me any questions that you feel could "
-                       "help you craft a better response. If you feel you have enough information to craft this response, "
-                       "please just provide it.")
-        return prompt, missing
+                    DataManager.save_prompt(st.session_state["prompt_name"].strip(), text_to_save)
+                    st.success(f"Saved: {st.session_state['prompt_name'].strip()}")
+        with clear_col:
+            st.button("Clear Form", key="clear_form_btn", on_click=clear_form_state, use_container_width=True)
+
+        # --- Prompt editor
+        st.text_area("Generated Prompt", height=280, key="generated_prompt")
+
+        # --- Tip + bottom-right toggles
+        tip_col, toggles_col = st.columns([6, 2])
+        with tip_col:
+            st.info("Tip: turn OFF Auto-update if you want to manually edit and keep your edits while changing selections.")
+        with toggles_col:
+            t1, t2 = st.columns(2)
+            with t1:
+                st.checkbox("Auto-update", key="auto_update_prompt", value=auto)
+            with t2:
+                st.checkbox("Request recursive feedback", key="recursive_feedback", value=recursive)
+
+    # (keep your _sec, _content_or_title, _build helpers as-is)
+
 
 # =========================
 # Clear Form (no navigation; resets selects/multiselects/customs/prompt)
@@ -389,3 +375,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
