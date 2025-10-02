@@ -308,9 +308,25 @@ class PromptBuilder:
         # Optional: small preview above the editor so you can see what's being generated
         # st.code(st.session_state["generated_prompt"] or "(empty)", language="markdown")
 
-        # --- Prompt editor (stateful for manual tweaks/copy)
+                # --- Prompt editor (stateful for manual tweaks/copy)
         st.text_area("Generated Prompt", height=250, key="generated_prompt")
         st.info("Tip: turn OFF Auto-update if you want to manually edit and keep your edits while changing selections.")
+
+        # --- Save controls (save whatever is currently in the box)
+        csave1, csave2 = st.columns([2, 1])
+        with csave1:
+            prompt_name = st.text_input("Prompt Name", key="prompt_name")
+        with csave2:
+            if st.button("Save Prompt", key="save_prompt_btn"):
+                text_to_save = st.session_state.get("generated_prompt", "").strip()
+                if not text_to_save:
+                    st.warning("Nothing to save — the prompt is empty.")
+                elif not prompt_name:
+                    st.warning("Please enter a Prompt Name.")
+                else:
+                    DataManager.save_prompt(prompt_name, text_to_save)
+                    st.success(f"Saved: {prompt_name}")
+
 
     @staticmethod
     def _create_section(title: str, element_type: str, df: pd.DataFrame,
@@ -506,4 +522,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
