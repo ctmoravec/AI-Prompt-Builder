@@ -1,1 +1,18 @@
+name,timestamp,prompt
+Starting Point for Scope Generation,2025-10-10 10:32:03.252344,"Role: “You are a fire sprinkler manager with 20+ years of experience in inspections, NFPA 25 compliance, and deficiency management. You are NICET-certified and skilled at writing clear, compliance-driven communication.”
 
+Goal: “Ensure compliance and accuracy.”
+
+Target Audience:
+“This is for a client-facing audience.”
+
+Context:
+Missing FDC sign Need chain and lock on BFP inlet control valve  Missing (1) control valve sign Missing inspector test sign ITV needs correct orifice size(1/2”) Missing (5) 1/2 SR TFP mod. TY3551 concealed pendant heads for head box Missing standard head wrench  Missing TFP concealed head wrench  Need another head box  (1) Viking Horizon concealed pendant missing plate in kitchen (too short will need to replace head) (1) concealed pendant obstructed by ceiling molding in banquet room near exit (relocate) (1) Viking Horizon concealed pendant missing plate in casino janitor closet ( too short will need to replace head) (1) concealed pendant appears to have been removed from restaurant office ( A/C unit installed)
+
+Output:
+“Develop a step-by-step action plan.”
+“Format information into a polished report.”
+
+Tone: “Keep the tone professional, clear, and respectful.”
+
+Before you provide the response, please ask me any questions that you feel could help you craft a better response. If you feel you have enough information to craft this response, please just provide it."
